@@ -1,0 +1,11 @@
+{
+    "require": {
+        "ext-json": "*",
+        "swoole/ide-helper": "^4.8",
+        "rhilip/bencode": "^2.3",
+        "ext-mbstring": "*",
+        "ext-pdo": "*",
+        "ext-redis": "*",
+        "ext-posix": "*"
+    }
+}
