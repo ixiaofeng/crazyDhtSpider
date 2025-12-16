@@ -101,6 +101,7 @@
 ### 数据库配置
 
 编辑 `dht_server/database.php` 配置 MySQL 数据库连接信息。
+`dht.sql`文件导入数据库即可。bt表默认31个分区。
 
 ### 其他
 
