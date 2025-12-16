@@ -48,7 +48,7 @@ A high-performance distributed DHT web crawler based on PHP and Swoole, designed
    ```
 4. **Stop the client**:
    ```bash
-   ps aux|grep master
+   ps aux|grep php_dht_client_master
    # Find the master process ID, assuming it's 1234
    # Terminate the master process
    kill -2 1234
@@ -81,7 +81,7 @@ A high-performance distributed DHT web crawler based on PHP and Swoole, designed
 4. **Stop the server**:
    ```bash
    # Find the master process
-   ps aux|grep server.php
+   ps aux|grep php_dht_server_master
    # Find the master process ID, assuming it's 1234
    # Terminate the master process
    kill -2 1234
