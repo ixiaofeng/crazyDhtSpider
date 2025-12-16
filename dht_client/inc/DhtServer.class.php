@@ -32,22 +32,37 @@ class DhtServer
 
     public static function auto_find_node($table, $bootstrap_nodes)
     {
-        $wait = 1.0 / MAX_NODE_SIZE;
+        // 使用协程批量发送find_node请求，提高并发性能
+        $nodes = [];
         
         if ($table instanceof Swoole\Table) {
             // 处理Swoole\Table格式
-            // 直接遍历Swoole\Table
             foreach ($table as $key => $node) {
-                // 发送查找find_node到node中
-                self::find_node(array($node['ip'], $node['port']), $node['nid']);
-                //  usleep($wait);
+                $nodes[] = [$node['ip'], $node['port'], $node['nid']];
             }
         } else {
             // 处理普通数组格式
             foreach ($table as $node) {
-                // 发送查找find_node到node中
-                self::find_node(array($node->ip, $node->port), $node->nid);
-                //  usleep($wait);
+                $nodes[] = [$node->ip, $node->port, $node->nid];
+            }
+        }
+        
+        // 使用Swoole的协程并发发送请求
+        if (!empty($nodes)) {
+            // 降低并发数，避免过多连接导致系统资源耗尽
+            $concurrency = 20; // 从50降低到20，减少每个批次的任务量
+            $node_chunks = array_chunk($nodes, $concurrency);
+            
+            foreach ($node_chunks as $chunk) {
+                // 为每个节点创建一个协程发送请求
+                foreach ($chunk as $node_info) {
+                    go(function () use ($node_info) {
+                        list($ip, $port, $nid) = $node_info;
+                        self::find_node(array($ip, $port), $nid);
+                    });
+                }
+                // 增加批次间隔，避免瞬间发送过多请求
+                usleep(5); // 从1毫秒增加到5毫秒，使用传统睡眠函数，兼容非协程环境
             }
         }
     }
@@ -79,49 +94,13 @@ class DhtServer
 
     public static function send_response($msg, $address)
     {
-        try {
-            global $serv;
+        global $serv;
 
-            // 验证服务器实例
-            if (!isset($serv) || !($serv instanceof Swoole\Server)) {
-                error_log('DhtServer::send_response: Invalid server instance');
-                return false;
-            }
-            
-            // 验证地址信息
-            if (!isset($address) || !is_array($address) || count($address) < 2) {
-                error_log('DhtServer::send_response: Invalid address');
-                return false;
-            }
-            
-            $ip = $address[0];
-            $port = $address[1];
-            
-            // 验证IP和端口
-            if (!filter_var($ip, FILTER_VALIDATE_IP) || !is_numeric($port) || $port < 1 || $port > 65535) {
-                error_log('DhtServer::send_response: Invalid IP or port');
-                return false;
-            }
-            
-            // 验证消息数据
-            if (empty($msg) || !is_array($msg)) {
-                error_log('DhtServer::send_response: Invalid message');
-                return false;
-            }
-            
-            // 编码消息
-            $data = Base::encode($msg);
-            if ($data === false || empty($data)) {
-                error_log('DhtServer::send_response: Failed to encode message');
-                return false;
-            }
-            
-            // 发送消息
-            return $serv->sendto($ip, $port, $data);
-        } catch (Throwable $e) {
-            // 捕获所有类型的错误，避免进程崩溃
-            error_log('DhtServer::send_response critical error: ' . $e->getMessage());
+        if (!filter_var($address[0], FILTER_VALIDATE_IP)) {
             return false;
         }
+        $ip = $address[0];
+        $data = Base::encode($msg);
+        $serv->sendto($ip, $address[1], $data);
     }
 }

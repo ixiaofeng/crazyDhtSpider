@@ -22,9 +22,9 @@ class DbPool
     // 创建新的数据库连接
     private function createConnection(): PDO
     {
-        global $database_config;
+        global $config;
         
-        $dsn = "mysql:host={$database_config['db']['host']};dbname={$database_config['db']['name']};charset=utf8mb4";
+        $dsn = "mysql:host={$config['db']['host']};dbname={$config['db']['name']};charset=utf8mb4";
         $options = [
             PDO::ATTR_PERSISTENT => false, // 关闭持久连接以避免状态共享问题
             PDO::ATTR_TIMEOUT => 10,
@@ -32,7 +32,7 @@ class DbPool
             PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true // 启用缓冲查询
         ];
         
-        $pdo = new PDO($dsn, $database_config['db']['user'], $database_config['db']['pass'], $options);
+        $pdo = new PDO($dsn, $config['db']['user'], $config['db']['pass'], $options);
         $this->connectionsCount++;
         return $pdo;
     }
