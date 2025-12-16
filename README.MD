@@ -98,6 +98,7 @@ A high-performance distributed DHT web crawler based on PHP and Swoole, designed
 ### Database Configuration
 
 Edit `dht_server/database.php` to configure your MySQL database connection.
+Import the `dht.sql` file into your database. The bt table has 31 partitions by default.
 
 ### Other
 
