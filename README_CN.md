@@ -51,7 +51,7 @@
    ```
 4. **关闭客户端**:
    ```bash
-   ps aux|grep master
+   ps aux|grep php_dht_client_master
    # 找到主进程ID，假设为 1234
    # 终止主进程
    kill -2 1234
@@ -84,7 +84,7 @@
 4. **关闭服务端**:
    ```bash
    # 查找主进程
-   ps aux|grep server.php
+   ps aux|grep php_dht_server_master
    # 找到主进程ID，假设为 1234
    # 终止主进程
    kill -2 1234
