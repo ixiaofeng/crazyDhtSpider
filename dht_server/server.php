@@ -23,7 +23,7 @@ Swoole\Coroutine::set(['hook_flags' => SWOOLE_HOOK_ALL]);
 
 // 注册启动事件，设置主进程名称
 $serv->on('start', function ($serv) {
-    // 设置主进程名称，与客户端区分开
+    // 设置主进程名称
     swoole_set_process_name("php_dht_server_master");
 });
 
