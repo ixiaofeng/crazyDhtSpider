@@ -1,251 +1,184 @@
 <?php
 
-class DhtClient
+use Medoo\Medoo;
+
+class DbPool
 {
-
-    public static $_bt_protocol = 'BitTorrent protocol';
-    public static $BT_MSG_ID = 20;
-    public static $EXT_HANDSHAKE_ID = 0;
-    public static $PIECE_LENGTH = 16384;
-
-    /**
-     * 处理接收到的find_node回复
-     * @param array $msg 接收到的数据
-     * @param array $address 对端链接信息
-     * @return void
-     */
-    public static function response_action($msg, $address)
+    private static $instance = null;
+    private $pool = []; // 连接池数组
+    private $maxConnections = 200; // 最大连接数，与MySQL最大连接数一致
+    private $connectionsCount = 0; // 当前连接数
+    
+    // 私有构造函数，防止外部实例化
+    private function __construct() {}
+    
+    // 获取单例实例
+    public static function getInstance(): DbPool
     {
-        global $table;
-        // 先检查接收到的信息是否正确
-        if (!isset($msg['r']['nodes']) || !isset($msg['r']['nodes'][1])) return;
-        // 对nodes数据进行解码
-
-        //echo '朋友'.$address[0].'在线'.PHP_EOL;
-        $nodes = Base::decode_nodes($msg['r']['nodes']);
-        // 对nodes循环处理
-        foreach ($nodes as $node) {
-            // 将node加入到路由表中
-            self::append($node);
+        if (self::$instance === null) {
+            self::$instance = new self();
         }
-        //echo '路由表nodes数量 '.count($table).PHP_EOL;
+        return self::$instance;
     }
-
-    /**
-     * 处理对端发来的请求
-     * @param array $msg 接收到的请求数据
-     * @param array $address 对端链接信息
-     * @return void
-     */
-    public static function request_action($msg, $address)
+    
+    // 创建新的数据库连接
+    private function createConnection(): Medoo
     {
-        switch ($msg['q']) {
-            case 'ping'://确认你是否在线
-                //echo '朋友'.$address[0].'正在确认你是否在线'.PHP_EOL;
-                self::on_ping($msg, $address);
-                break;
-            case 'find_node': //向服务器发出寻找节点的请求
-                //echo '朋友'.$address[0].'向你发出寻找节点的请求'.PHP_EOL;
-                self::on_find_node($msg, $address);
-                break;
-            case 'get_peers':
-                //echo '朋友'.$address[0].'向你发出查找资源的请求'.PHP_EOL;
-                // 处理get_peers请求
-                self::on_get_peers($msg, $address);
-                break;
-            case 'announce_peer':
-                //echo '朋友' . $address[0] . '找到资源了 通知你一声' . PHP_EOL;
-                // 处理announce_peer请求
-                self::on_announce_peer($msg, $address);
-                break;
-            default:
-                break;
-        }
+        global $database_config;
+        $medoo = new Medoo([
+            'database_type' => 'mysql',
+            'database_name' => $database_config['db']['name'],
+            'server' => $database_config['db']['host'],
+            'username' => $database_config['db']['user'],
+            'password' => $database_config['db']['pass'],
+            'charset' => 'utf8mb4',
+            'option' => [
+                PDO::ATTR_PERSISTENT => false, // 关闭持久连接以避免状态共享问题
+                PDO::ATTR_TIMEOUT => 10,
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true // 启用缓冲查询
+            ]
+        ]);
+        $this->connectionsCount++;
+        return $medoo;
     }
-
-    /**
-     * 添加node到路由表
-     * @param Node $node node模型
-     * @return boolean       是否添加成功
-     */
-    public static function append($node)
+    
+    // 从连接池获取连接
+    private function getConnection(): Medoo
     {
-        global $nid, $table;
-        // 检查node id是否正确
-        if (!isset($node->nid[19]))
-            return false;
-
-        // 检查是否为自身node id
-        if ($node->nid == $nid)
-            return false;
-
-        // 检查node是否已存在
-        if (in_array($node, $table))
-            return false;
-
-        if ($node->port < 1 or $node->port > 65535)
-            return false;
-
-        // 如果路由表中的项达到200时, 删除第一项
-        if (count($table) >= MAX_NODE_SIZE)
-            array_shift($table);
-
-        return array_push($table, $node);
-    }
-
-    public static function on_ping($msg, $address)
-    {
-        global $nid;
-        // 获取对端node id
-        $id = $msg['a']['id'];
-        // 生成回复数据
-        $msg = array(
-            't' => $msg['t'],
-            'y' => 'r',
-            'r' => array(
-                'id' => Base::get_neighbor($id, $nid)
-            )
-        );
-
-        // 将node加入路由表
-        self::append(new Node($id, $address[0], $address[1]));
-        // 发送回复数据
-        DhtServer::send_response($msg, $address);
-    }
-
-    public static function on_find_node($msg, $address)
-    {
-        global $nid;
-
-        // 获取对端node id
-        $id = $msg['a']['id'];
-        // 生成回复数据
-        $msg = array(
-            't' => $msg['t'],
-            'y' => 'r',
-            'r' => array(
-                'id' => Base::get_neighbor($id, $nid),
-                'nodes' => Base::encode_nodes(self::get_nodes(16))
-            )
-        );
-
-        // 将node加入路由表
-        self::append(new Node($id, $address[0], $address[1]));
-        // 发送回复数据
-        DhtServer::send_response($msg, $address);
-    }
-
-    /**
-     * 处理get_peers请求
-     * @param array $msg 接收到的get_peers请求数据
-     * @param array $address 对端链接信息
-     * @return void
-     */
-    public static function on_get_peers($msg, $address)
-    {
-        global $nid;
-
-        // 获取info_hash信息
-        $infohash = $msg['a']['info_hash'];
-        // 获取node id
-        $id = $msg['a']['id'];
-
-        // 生成回复数据
-        $msg = array(
-            't' => $msg['t'],
-            'y' => 'r',
-            'r' => array(
-                'id' => Base::get_neighbor($id, $nid),
-                'nodes' => "",
-                'token' => substr($infohash, 0, 2)
-            )
-        );
-
-
-        // 将node加入路由表
-        self::append(new Node($id, $address[0], $address[1]));
-        // 向对端发送回复数据
-        DhtServer::send_response($msg, $address);
-    }
-
-    /**
-     * 处理announce_peer请求
-     * @param array $msg 接收到的announce_peer请求数据
-     * @param array $address 对端链接信息
-     * @return void
-     */
-    public static function on_announce_peer($msg, $address)
-    {
-        global $nid, $serv;
-        $infohash = $msg['a']['info_hash'];
-        $port = $msg['a']['port'];
-        $token = $msg['a']['token'];
-        $id = $msg['a']['id'];
-        $tid = $msg['t'];
-
-        //echo 'Ip:' . $address[0] . ' Port:' . $port .' test connent!'. PHP_EOL;
-        //return;
-
-        // 验证token是否正确
-        if (substr($infohash, 0, 2) != $token) return;
-
-        if (isset($msg['a']['implied_port']) && $msg['a']['implied_port'] != 0) {
-            $port = $address[1];
-        }
-
-        if ($port >= 65536 || $port <= 0) {
-            return;
-        }
-
-        if ($tid == '') {
-            //return;
-        }
-
-        // 生成回复数据
-        $msg = array(
-            't' => $msg['t'],
-            'y' => 'r',
-            'r' => array(
-                'id' => $nid
-            )
-        );
-
-        // 发送请求回复
-        DhtServer::send_response($msg, $address);
-        $ip = $address[0];
-        swoole_process::wait(false);
-        $process = new swoole_process(function (swoole_process $worker) use ($ip, $port, $infohash) {
-            $client = new swoole_client(SWOOLE_SOCK_TCP, SWOOLE_SOCK_SYNC);
-            if (!@$client->connect($ip, $port, 1)) {
-                // echo ("connect failed. Error: {$client->errCode}".PHP_EOL);
-            } else {
-                //echo 'connent success! '.$ip.':'.$port.PHP_EOL;
-                $rs = Metadata::download_metadata($client, $infohash);
-                if ($rs != false) {
-                    DhtServer::send_response(json_encode($rs), array(SERVER_IP, SERVER_PORT));
-                    echo $rs['name'] . PHP_EOL;
-                }
-                $client->close(true);
+        // 优先从连接池中获取可用连接
+        foreach ($this->pool as $key => $connection) {
+            try {
+                // 检查连接是否有效
+                $connection->pdo->query('SELECT 1');
+                unset($this->pool[$key]);
+                return $connection;
+            } catch (Exception $e) {
+                // 连接无效，移除
+                unset($this->pool[$key]);
+                $this->connectionsCount--;
             }
-            $worker->exit(0);
-        }, false);
-        $process->start();
-    }
-
-    public static function get_nodes($len = 8)
-    {
-        global $table;
-
-        if (count($table) <= $len)
-            return $table;
-
-        $nodes = array();
-
-        for ($i = 0; $i < $len; $i++) {
-            $nodes[] = $table[mt_rand(0, count($table) - 1)];
         }
-
-        return $nodes;
+        
+        // 连接池为空且未达到最大连接数，创建新连接
+        if ($this->connectionsCount < $this->maxConnections) {
+            return $this->createConnection();
+        }
+        
+        // 等待一小段时间后再次尝试获取连接
+        usleep(1000);
+        return $this->getConnection();
     }
-
+    
+    // 将连接返回连接池
+    private function releaseConnection(Medoo $medoo): void
+    {
+        $this->pool[] = $medoo;
+    }
+    
+    // 执行数据库查询
+    public static function sourceQuery($rs, $bt_data): void
+    {
+        $instance = self::getInstance();
+        $medoo = $instance->getConnection();
+        
+        try {
+            // 直接使用PDO执行查询，确保结果被完全获取
+            $pdo = $medoo->pdo;
+            
+            // 检查是否已存在
+            $stmt = $pdo->prepare("SELECT infohash FROM history WHERE infohash = ?");
+            $stmt->execute([$rs['infohash']]);
+            // 确保获取所有结果
+            $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            // 显式关闭语句
+            $stmt->closeCursor();
+            
+            if (!empty($data)) {
+                $stmt = $pdo->prepare("UPDATE bt SET hot = hot + 1, lasttime = NOW() WHERE infohash = ?");
+                $stmt->execute([$rs['infohash']]);
+                $stmt->closeCursor();
+            } else {
+                $stmt = $pdo->prepare("INSERT INTO history (infohash) VALUES (?)");
+                $stmt->execute([$rs['infohash']]);
+                $stmt->closeCursor();
+                
+                // 构建insert语句，将time和lasttime替换为NOW()
+                $bt_data['time'] = 'NOW()';
+                $bt_data['lasttime'] = 'NOW()';
+                
+                // 分离需要占位符的列和直接使用函数的列
+                $placeholder_columns = [];
+                $placeholder_values = [];
+                $function_columns = [];
+                
+                foreach ($bt_data as $column => $value) {
+                    if ($value === 'NOW()') {
+                        $function_columns[] = "{$column} = NOW()";
+                    } else {
+                        $placeholder_columns[] = $column;
+                        $placeholder_values[] = $value;
+                    }
+                }
+                
+                // 构建SQL语句
+                $sql = "INSERT INTO bt ";
+                
+                if (!empty($placeholder_columns)) {
+                    $columns_part = '(' . implode(', ', $placeholder_columns) . ')' . 
+                                   (empty($function_columns) ? '' : ', ');
+                    $values_part = 'VALUES (' . implode(', ', array_fill(0, count($placeholder_columns), '?')) . ')' . 
+                                  (empty($function_columns) ? '' : ', ');
+                } else {
+                    $columns_part = '';
+                    $values_part = '';
+                }
+                
+                if (!empty($function_columns)) {
+                    $function_part = implode(', ', $function_columns);
+                } else {
+                    $function_part = '';
+                }
+                
+                // 组合完整的SQL语句
+                if (!empty($placeholder_columns) && !empty($function_columns)) {
+                    $sql .= "{$columns_part} SET {$function_part}";
+                } elseif (!empty($placeholder_columns)) {
+                    $sql .= "{$columns_part} {$values_part}";
+                } elseif (!empty($function_columns)) {
+                    $sql .= "SET {$function_part}";
+                }
+                
+                $stmt = $pdo->prepare($sql);
+                if (!empty($placeholder_values)) {
+                    $stmt->execute($placeholder_values);
+                } else {
+                    $stmt->execute();
+                }
+                $stmt->closeCursor();
+            }
+            
+            // 查询完成后将连接返回连接池
+            $instance->releaseConnection($medoo);
+        } catch (Exception $e) {
+            // 发生异常时，不将连接返回连接池
+            $instance->connectionsCount--;
+            throw $e;
+        }
+    }
+    
+    // 设置最大连接数
+    public static function setMaxConnections(int $max): void
+    {
+        $instance = self::getInstance();
+        $instance->maxConnections = $max;
+    }
+    
+    // 手动释放所有连接
+    public static function close(): void
+    {
+        $instance = self::getInstance();
+        $instance->pool = [];
+        $instance->connectionsCount = 0;
+    }
 }

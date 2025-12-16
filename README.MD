@@ -1,133 +1,45 @@
-# 🕷️ crazyDhtSpider
+crazyDhtSpider
+======
+  This project is based on phpDhtSpider modification：https://github.com/cuijun123/phpDhtSpider
+***
+**[中文说明](README_CN.md)**
 
-This project is a modified version of [phpDhtSpider](https://github.com/cuijun123/phpDhtSpider).
+## Distributed DHT web crawler based on PHP
 
-🌐 **[中文说明](README_CN.md)**
+#########Software Operation Instructions##############
 
-## 📋 Overview
+**dht_client directory** For the crawler server **Operating environment requirements**
 
-A high-performance distributed DHT web crawler based on PHP and Swoole, designed to efficiently crawl the BitTorrent DHT network.
+1.Set server ulimit -n 65535
 
-## 🚀 Quick Start
+2.Server firewall needs to open port 6882 UDP protocol
 
-### Requirements
+3.run ./swoole-cli dht_client/client.php
 
-- PHP 7.2+
-- [Swoole](https://www.swoole.co.uk/) extension
-- Linux/macOS system (Windows is not recommended)
+**A lot of people don't collect data because of the second reason**
 
-### Installation
+=============================================================
 
-**Clone the repository**
-   ```bash
-   git clone https://github.com/ixiaofeng/crazyDhtSpider.git
-   cd crazyDhtSpider
-   ```
+**dht_server directory** Receive data server (can be on the same server) **Operating environment requirements**
 
-## 🛠️ Configuration
+1.Set server ulimit -n 65535
 
-### dht_client (Crawler Server)
+2.The firewall opens the corresponding port of DHT_CLIENT request (in the configuration item, the default 2345 UDP protocol, if the server and the client are on the same machine, you can choose not to open
 
-**Directory**: `dht_client/`
+3.run ./swoole-cli dht_server/server.php and ./swoole-cli dht_client/client.php
 
-**Environment Requirements**:
+=============================================================
 
-1. **Increase file descriptor limit**:
-   ```bash
-   ulimit -n 65535
-   ```
+1、There will be error logs during operation, which will not affect the use.If the log files are too large, you can clear them using scheduled tasks
 
-2. **Open firewall port (CRITICAL!)**:
-   ```bash
-   # Allow UDP port 6882
-   ```
+2、Note that 'daemonize'=>false in config.php.  You can decide whether to start the background daemon or not
 
-3. **Start the client**:
-   ```bash
-   ./swoole-cli dht_client/client.php
-   ```
-4. **Stop the client**:
-   ```bash
-   ps aux|grep php_dht_client_master
-   # Find the master process ID, assuming it's 1234
-   # Terminate the master process
-   kill -2 1234
-   ```
+3、After the data volume reaches the level of one layer, it needs to be divided into tables or partitioned, otherwise the performance of MySQL will be very poor, please study by yourself。
 
-> ⚠️ **Important**: Many users fail to collect data because they forget to open port 6882!
+4、It is recommended to find a more adequate flow of VPS to run, preferably unlimited flow
 
-### dht_server (Data Receiver)
+5、 At the beginning of the operation, because the node information is less, the data is relatively slow to obtain, the longer the operation time, the better the effect
 
-**Directory**: `dht_server/`
-
-**Environment Requirements**:
-
-1. **Increase file descriptor limit**:
-   ```bash
-   ulimit -n 65535
-   ```
-
-2. **Open firewall port** (only if server and client are on different machines):
-   ```bash
-   # Allow UDP port 2345 (default)
-   ```
-
-3. **Start the server**:
-   ```bash
-   # Start the server
-   ./swoole-cli dht_server/server.php
-   
-   ```
-4. **Stop the server**:
-   ```bash
-   # Find the master process
-   ps aux|grep php_dht_server_master
-   # Find the master process ID, assuming it's 1234
-   # Terminate the master process
-   kill -2 1234
-   ```
-
-## ⚙️ Advanced Settings
-
-### config.php Options
-
-- `daemonize`: Set to `true` to run in background daemon mode
-- `worker_num`: Number of worker processes
-- `task_worker_num`: Number of task processes
-
-### Database Configuration
-
-Edit `dht_server/database.php` to configure your MySQL database connection.
-Import the `dht.sql` file into your database. The bt table has 31 partitions by default.
-
-### Other
-
-After running the client, a `node_id.dat` file will be generated in the `dht_client` directory. This file contains the client's node ID, ensuring the node ID remains unchanged when the node is restarted.
-
-A `router_table.dat` file will also be generated, which contains the client's routing table for storing information about other nodes. It is updated every minute by default.
-
-## 📊 Performance Tips
-
-1. **Error Logs**: The crawler will generate error logs during operation, which do not affect normal use. Consider setting up a cron job to clear large log files.
-
-2. **Database Optimization**: When data volume grows, consider table partitioning or sharding to maintain MySQL performance.
-
-3. **Server Requirements**: Use a VPS with sufficient bandwidth (unlimited bandwidth is recommended).
-
-4. **Initial Data Collection**: Data collection may be slow initially as the crawler builds its node information database. Performance will improve over time.
-
-## 📝 Notes
-
-- This tool is primarily intended for **learning and research purposes** related to Swoole and DHT networks.
-- The author is not responsible for any disputes or legal issues arising from the use of this tool.
-
-## 🤝 Contributing
-
-Contributions are welcome! Feel free to submit issues and pull requests.
-
-## 📄 License
-
-[MIT License](LICENSE)
-
+6、This tool is mainly used for study and research. I shall not be responsible for any disputes or legal problems arising from the use of this tool
 
 

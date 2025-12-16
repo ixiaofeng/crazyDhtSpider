@@ -33,7 +33,7 @@ CREATE TABLE `bt` (
   `length` bigint(20) NOT NULL DEFAULT '0' COMMENT '文件大小',
   `piece_length` int(11) NOT NULL DEFAULT '0' COMMENT '种子大小',
   `infohash` char(40) NOT NULL COMMENT '种子哈希值',
-  `files` json COMMENT '文件列表（JSON格式）',
+  `files` mediumtext COMMENT '文件列表',
   `hits` int(11) NOT NULL DEFAULT '0' COMMENT '点击量',
   `hot` int(11) NOT NULL DEFAULT '1' COMMENT '热度',
   `time` datetime NOT NULL COMMENT '收录时间',

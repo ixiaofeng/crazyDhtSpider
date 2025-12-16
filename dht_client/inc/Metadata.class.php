@@ -23,8 +23,12 @@ class Metadata
         $dict = [];
         
         try {
+            // 优化：设置更短的总超时时间
+            $start_time = microtime(true);
+            $total_timeout = 20; // 总超时时间从10秒调整为20秒
+            
             $packet = self::send_handshake($client, $infohash);
-            if ($packet === false) {
+            if ($packet === false || microtime(true) - $start_time > $total_timeout) {
                 return false;
             }
 
@@ -34,13 +38,15 @@ class Metadata
             }
 
             $packet = self::send_ext_handshake($client);
-            if ($packet === false) {
+            if ($packet === false || microtime(true) - $start_time > $total_timeout) {
                 return false;
             }
 
             $ut_metadata = self::get_ut_metadata($packet);
             $metadata_size = self::get_metadata_size($packet);
-            if ($metadata_size > self::$PIECE_LENGTH * 1000) {
+            
+            // 优化：更严格的大小限制
+            if ($metadata_size > self::$PIECE_LENGTH * 500) {
                 return false;
             }
             if ($metadata_size < 10) {
@@ -48,13 +54,10 @@ class Metadata
             }
 
             $piecesNum = ceil($metadata_size / (self::$PIECE_LENGTH));
-            // 限制最大piece数量，避免处理过大的metadata
-            if ($piecesNum > 100) {
+            // 优化：进一步限制最大piece数量
+            if ($piecesNum > 50) {
                 return false;
             }
-            
-            $start_time = microtime(true);
-            $total_timeout = 10; // 总超时时间10秒
             
             for ($i = 0; $i < $piecesNum; $i++) {
                 // 检查总超时
@@ -86,11 +89,21 @@ class Metadata
 
                 $metadata[] = $_metadata;
             }
+            
+            // 优化：提前检查总超时
+            if (microtime(true) - $start_time > $total_timeout) {
+                return false;
+            }
+            
             $metadata_str = implode('', $metadata);
             unset($metadata);
 
             $metadata_decoded = Base::decode($metadata_str);
             unset($metadata_str);
+            
+            if (!is_array($metadata_decoded)) {
+                return false;
+            }
             
             $_infohash = strtoupper(bin2hex($infohash));
             if (isset($metadata_decoded['name']) && $metadata_decoded['name'] != '') {
@@ -101,11 +114,11 @@ class Metadata
                 $_data['piece_length'] = isset($metadata_decoded['piece length']) ? $metadata_decoded['piece length'] : 0;
                 
                 $result = $_data;
-            } else {
-                return false;
             }
-        } catch (Exception $e) {
-            Func::Logs("Metadata download error: " . $e->getMessage() . PHP_EOL, 3);
+        } catch (Throwable $e) {
+            // 优化：使用Throwable捕获所有错误，包括致命错误
+            // 优化：简化日志记录，只记录关键信息
+            error_log("Metadata download error: " . $e->getMessage());
             $result = false;
         }
         

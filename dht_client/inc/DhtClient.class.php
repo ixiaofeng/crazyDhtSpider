@@ -87,7 +87,7 @@ class DhtClient
      */
     public static function append($node)
     {
-        global $nid, $table, $config;
+        global $nid, $table, $ip_port_index, $config;
         // 检查node id是否正确
         if (!isset($node->nid[19])) {
             return false;
@@ -105,41 +105,44 @@ class DhtClient
 
         if ($table instanceof Swoole\Table) {
             // 使用Swoole\Table实现
+            $ip_port_key = $node->ip . ':' . $node->port;
+            
             // 检查是否已存在相同节点ID
             if ($table->exist($node->nid)) {
-                // 节点已存在，更新信息
+                // 节点已存在，获取旧的IP+端口信息
+                $old_node = $table->get($node->nid);
+                $old_ip_port_key = $old_node['ip'] . ':' . $old_node['port'];
+                
+                // 更新节点信息
                 $table->set($node->nid, [
                     'nid' => $node->nid,
                     'ip' => $node->ip,
                     'port' => $node->port
                 ]);
+                
+                // 如果IP或端口发生变化，更新索引表
+                if ($old_ip_port_key != $ip_port_key) {
+                    $ip_port_index->del($old_ip_port_key);
+                    $ip_port_index->set($ip_port_key, ['nid' => $node->nid]);
+                }
+                
                 return $table->count();
             }
 
-            // 检查是否已存在相同IP+端口的节点
+            // 使用IP+端口索引表快速检查是否已存在相同IP+端口的节点
             $existing_nid = null;
-            // 直接遍历Swoole\Table
-            foreach ($table as $key => $existing_node) {
-                if ($existing_node['ip'] == $node->ip && $existing_node['port'] == $node->port) {
-                    $existing_nid = $existing_node['nid'];
-                    break;
-                }
+            if ($ip_port_index->exist($ip_port_key)) {
+                $existing_nid = $ip_port_index->get($ip_port_key)['nid'];
             }
 
-            if ($existing_nid !== null) {
+            if ($existing_nid !== null && $existing_nid != $node->nid) {
                 // 删除旧节点
                 $table->del($existing_nid);
-                // 添加新节点
-                $table->set($node->nid, [
-                    'nid' => $node->nid,
-                    'ip' => $node->ip,
-                    'port' => $node->port
-                ]);
-                return $table->count();
+                $ip_port_index->del($ip_port_key);
             }
 
             // 定期清理路由表，保持节点数量在合理范围
-            $max_size = $config['max_node_size'] ?? MAX_NODE_SIZE;
+            $max_size = $config['application']['max_node_size'] ?? 200; // 默认值
             if ($table->count() >= $max_size) {
                 // 随机删除部分节点
                 $remove_count = $table->count() - floor($max_size * 0.8);
@@ -150,7 +153,11 @@ class DhtClient
                 }
                 shuffle($keys);
                 for ($i = 0; $i < $remove_count && $table->count() > floor($max_size * 0.8); $i++) {
+                    // 删除节点时同步更新索引表
+                    $del_node = $table->get($keys[$i]);
+                    $del_ip_port_key = $del_node['ip'] . ':' . $del_node['port'];
                     $table->del($keys[$i]);
+                    $ip_port_index->del($del_ip_port_key);
                 }
             }
 
@@ -160,6 +167,9 @@ class DhtClient
                 'ip' => $node->ip,
                 'port' => $node->port
             ]);
+            
+            // 更新索引表
+            $ip_port_index->set($ip_port_key, ['nid' => $node->nid]);
             
             return $table->count();
         } else {
@@ -183,7 +193,7 @@ class DhtClient
             }
 
             // 定期清理路由表，保持节点数量在合理范围
-            $max_size = $config['max_node_size'] ?? MAX_NODE_SIZE;
+            $max_size = $config['max_node_size'] ?? 200; // 默认值
             if (count($table) >= $max_size) {
                 // 随机删除部分节点而不是只删除第一个，保持路由表的多样性
                 $remove_count = count($table) - floor($max_size * 0.8);
@@ -322,7 +332,9 @@ class DhtClient
 
         // 检查当前任务数量，如果过多则暂时不提交新任务
         $stats = $serv->stats();
-        if ($stats['tasking_num'] >= 95) { // 留5个缓冲，避免超过task_worker_num=100的配置
+        // 留10%的缓冲，避免超过task_worker_num的配置
+        $max_tasks = max(1, floor($stats['task_worker_num'] * 0.9));
+        if ($stats['tasking_num'] >= $max_tasks) {
             return;
         }
 

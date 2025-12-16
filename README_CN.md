@@ -1,132 +1,41 @@
-# 🕷️ crazyDhtSpider
+crazyDhtSpider
+====== 
+ 本项目是在phpDhtSpider基础上修改而来：https://github.com/cuijun123/phpDhtSpider
+***
+## php实现的dht爬虫（分布式）
 
-本项目是在 [phpDhtSpider](https://github.com/cuijun123/phpDhtSpider) 基础上修改而来。
+#########运行说明##############
 
-🌐 **[English Documentation](README.MD)**
+**dht_client目录** 为爬虫服务器 **环境要求**
 
-## 📋 项目概述
+1.设置服务器 ulimit -n 65535
 
-一个基于 PHP 和 Swoole 开发的高性能分布式 DHT 网络爬虫，专门用于高效爬取 BitTorrent DHT 网络数据。
+2.防火墙开放6882端口(切记！！！)
 
-## 🚀 快速开始
+3.运行 ./swoole-cli dht_client/client.php
 
-### 环境要求
+**很多采集不到数据 是由于第二点导致的**
 
-- PHP 7.2+
-- [Swoole](https://www.swoole.co.uk/) 扩展
-- Linux/macOS 系统 (不推荐 Windows)
+=============================================================
 
-### 安装
+**dht_server目录** 接受数据服务器(可在同一服务器) **环境要求**
 
- **克隆仓库**
-   ```bash
-   git clone https://github.com/ixiaofeng/crazyDhtSpider.git
-   cd crazyDhtSpider
-   ```
+1.设置服务器 ulimit -n 65535
 
+2.防火墙开放dht_client请求的对应端口(配置项中，默认2345)，如果服务端和客户端在同一机器上，可以不放开。
 
+3.运行 ./swoole-cli dht_server/server.php 和 ./swoole-cli dht_client/client.php
 
-## 🛠️ 配置
+=============================================================
 
+1、运行过程中会有错误日志，不影响使用，具体原因可以自己分析，如果日志量过大，可以自行使用定时任务清理。
 
-### dht_client (爬虫服务器)
+2、注意config.php中的'daemonize'=>false,可以决定是否开启后台守护进程
 
-**目录**: `dht_client/`
+3、数据量达到一层程度后需要分表或者分区，不然mysql性能会很差
 
-**环境要求**:
+4、建议找一个流量比较充足的VPS来跑，最好是无限流量的
 
-1. **增加文件描述符限制**:
-   ```bash
-   ulimit -n 65535
-   ```
+5、刚开始运行的时候因为节点信息获取的少，获取数据比较慢，很快速度就会上来
 
-2. **开放防火墙端口 (至关重要!)**:
-   ```bash
-   # 允许 UDP 端口 6882
-   ```
-
-3. **启动客户端**:
-   ```bash
-   ./swoole-cli dht_client/client.php
-   ```
-4. **关闭客户端**:
-   ```bash
-   ps aux|grep php_dht_client_master
-   # 找到主进程ID，假设为 1234
-   # 终止主进程
-   kill -2 1234
-   ```
-
-> ⚠️ **重要**: 很多用户采集不到数据是因为忘记开放 6882 端口！
-
-### dht_server (数据接收服务器)
-
-**目录**: `dht_server/`
-
-**环境要求**:
-
-1. **增加文件描述符限制**:
-   ```bash
-   ulimit -n 65535
-   ```
-
-2. **开放防火墙端口** (仅当服务器和客户端在不同机器上时需要):
-   ```bash
-   # 允许 UDP 端口 2345 (默认)
-   ```
-
-3. **启动服务端**:
-   ```bash
-   # 启动服务器
-   ./swoole-cli dht_server/server.php
-   
-   ```
-4. **关闭服务端**:
-   ```bash
-   # 查找主进程
-   ps aux|grep php_dht_server_master
-   # 找到主进程ID，假设为 1234
-   # 终止主进程
-   kill -2 1234
-   ```
-
-## ⚙️ 高级设置
-
-### config.php 配置选项
-
-- `daemonize`: 设置为 `true` 以后台守护进程模式运行
-- `worker_num`: 工作进程数量
-- `task_worker_num`: 任务进程数量
-
-### 数据库配置
-
-编辑 `dht_server/database.php` 配置 MySQL 数据库连接信息。
-`dht.sql`文件导入数据库即可。bt表默认31个分区。
-
-### 其他
-
-客户端运行后，会在dht_client目录下生成`node_id.dat`文件，该文件包含了客户端的节点ID，保证每次重启节点后，节点ID不变。
-还会生成`router_table.dat`文件，该文件包含了客户端的路由表，用于存储其他节点的信息，默认一分钟更新一次。
-
-## 📊 性能优化建议
-
-1. **错误日志**: 运行过程中会生成错误日志，不影响正常使用。如果日志量过大，可以设置定时任务清理。
-
-2. **数据库优化**: 当数据量增长到一定程度时，建议使用分表或分区来维护 MySQL 性能。
-
-3. **服务器要求**: 使用流量充足的 VPS，最好是无限流量。
-
-4. **初始数据采集**: 刚开始运行时，由于节点信息较少，数据采集可能较慢，随着时间推移，性能会逐渐提升。
-
-## 📝 注意事项
-
-- 本工具仅用于学习和研究 Swoole 相关知识
-- 如在使用中产生任何纠纷或法律问题，本人概不负责
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request 来帮助改进项目！
-
-## 📄 许可证
-
-[MIT License](LICENSE)
+6、本工具仅用于学习和研究swoole相关知识，如果在使用中产生任何纠纷或者法律问题，本人概不负责
