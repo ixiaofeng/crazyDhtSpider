@@ -46,6 +46,13 @@ A high-performance distributed DHT web crawler based on PHP and Swoole, designed
    ```bash
    ./swoole-cli dht_client/client.php
    ```
+4. **Stop the client**:
+   ```bash
+   ps aux|grep master
+   # Find the master process ID, assuming it's 1234
+   # Terminate the master process
+   kill -2 1234
+   ```
 
 > ⚠️ **Important**: Many users fail to collect data because they forget to open port 6882!
 
@@ -71,6 +78,14 @@ A high-performance distributed DHT web crawler based on PHP and Swoole, designed
    ./swoole-cli dht_server/server.php
    
    ```
+4. **Stop the server**:
+   ```bash
+   # Find the master process
+   ps aux|grep server.php
+   # Find the master process ID, assuming it's 1234
+   # Terminate the master process
+   kill -2 1234
+   ```
 
 ## ⚙️ Advanced Settings
 
@@ -83,6 +98,12 @@ A high-performance distributed DHT web crawler based on PHP and Swoole, designed
 ### Database Configuration
 
 Edit `dht_server/database.php` to configure your MySQL database connection.
+
+### Other
+
+After running the client, a `node_id.dat` file will be generated in the `dht_client` directory. This file contains the client's node ID, ensuring the node ID remains unchanged when the node is restarted.
+
+A `router_table.dat` file will also be generated, which contains the client's routing table for storing information about other nodes. It is updated every minute by default.
 
 ## 📊 Performance Tips
 

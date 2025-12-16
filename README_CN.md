@@ -49,6 +49,13 @@
    ```bash
    ./swoole-cli dht_client/client.php
    ```
+4. **关闭客户端**:
+   ```bash
+   ps aux|grep master
+   # 找到主进程ID，假设为 1234
+   # 终止主进程
+   kill -2 1234
+   ```
 
 > ⚠️ **重要**: 很多用户采集不到数据是因为忘记开放 6882 端口！
 
@@ -74,6 +81,14 @@
    ./swoole-cli dht_server/server.php
    
    ```
+4. **关闭服务端**:
+   ```bash
+   # 查找主进程
+   ps aux|grep server.php
+   # 找到主进程ID，假设为 1234
+   # 终止主进程
+   kill -2 1234
+   ```
 
 ## ⚙️ 高级设置
 
@@ -86,6 +101,11 @@
 ### 数据库配置
 
 编辑 `dht_server/database.php` 配置 MySQL 数据库连接信息。
+
+### 其他
+
+客户端运行后，会在dht_client目录下生成`node_id.dat`文件，该文件包含了客户端的节点ID，保证每次重启节点后，节点ID不变。
+还会生成`router_table.dat`文件，该文件包含了客户端的路由表，用于存储其他节点的信息，默认一分钟更新一次。
 
 ## 📊 性能优化建议
 
