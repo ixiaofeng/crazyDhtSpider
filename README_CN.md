@@ -12,7 +12,9 @@ crazyDhtSpider
 
 2.防火墙开放6882端口(切记！！！)
 
-3.运行 ./swoole-cli dht_client/client.php
+3.请自行前往swoole官网下载对应的swoole可执行文件放置于dht_client和dht_server同级目录
+
+4.运行 ./swoole-cli dht_client/client.php
 
 **很多采集不到数据 是由于第二点导致的**
 
