@@ -1,6 +1,7 @@
 # crazyDhtSpider
 
-![DHT Spider](https://neeko-copilot.bytedance.net/api/text2image?prompt=Distributed%20DHT%20web%20crawler%20architecture%20diagram%20with%20nodes%20and%20data%20flow%2C%20technical%20style%2C%20blue%20color%20scheme&image_size=square_hd)
+## 🌐 Language Switch
+- **English README** | [中文 README](README_CN.md)
 
 This project is based on phpDhtSpider modification: [https://github.com/cuijun123/phpDhtSpider](https://github.com/cuijun123/phpDhtSpider)
 
