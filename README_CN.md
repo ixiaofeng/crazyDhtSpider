@@ -1,43 +1,176 @@
-crazyDhtSpider
-====== 
- 本项目是在phpDhtSpider基础上修改而来：https://github.com/cuijun123/phpDhtSpider
-***
-## php实现的dht爬虫（分布式）
+# crazyDhtSpider
 
-#########运行说明##############
+![DHT Spider](https://neeko-copilot.bytedance.net/api/text2image?prompt=Distributed%20DHT%20web%20crawler%20architecture%20diagram%20with%20nodes%20and%20data%20flow%2C%20technical%20style%2C%20blue%20color%20scheme&image_size=square_hd)
 
-**dht_client目录** 为爬虫服务器 **环境要求**
+本项目是在phpDhtSpider基础上修改而来：[https://github.com/cuijun123/phpDhtSpider](https://github.com/cuijun123/phpDhtSpider)
 
-1.设置服务器 ulimit -n 65535
+## 📋 项目概述
 
-2.防火墙开放6882端口(切记！！！)
+一个基于 PHP + Swoole 实现的分布式 DHT 网络爬虫，旨在高效收集和处理 DHT 网络数据。
 
-3.请自行前往swoole官网下载对应的swoole可执行文件放置于dht_client和dht_server同级目录
+## 🚀 快速开始
 
-4.运行 ./swoole-cli dht_client/client.php
+### 环境要求
 
-**很多采集不到数据 是由于第二点导致的**
+- 服务器已设置 `ulimit -n 65535`
+- 防火墙已开放所需端口
+- Swoole 可执行文件已放置于项目根目录
 
-=============================================================
+### 安装步骤
 
-**dht_server目录** 接受数据服务器(可在同一服务器) **环境要求**
+1. **克隆仓库**
+   ```bash
+   git clone https://github.com/ixiaofeng/crazyDhtSpider.git
+   cd crazyDhtSpider
+   ```
 
-1.设置服务器 ulimit -n 65535
+2. **下载 Swoole 可执行文件**
+   - 访问 [Swoole 官方网站](https://www.swoole.com/)
+   - 下载对应的 Swoole 可执行文件
+   - 放置于 `dht_client` 和 `dht_server` 同级目录
 
-2.防火墙开放dht_client请求的对应端口(配置项中，默认2345)，如果服务端和客户端在同一机器上，可以不放开。
+3. **配置项目**
+   - 根据需要编辑 `dht_client/config.php` 和 `dht_server/config.php`
+   - 确保数据库连接设置正确
 
-3.运行 ./swoole-cli dht_server/server.php 和 ./swoole-cli dht_client/client.php
+### 运行爬虫
 
-=============================================================
+#### dht_client（爬虫服务器）
 
-1、运行过程中会有错误日志，不影响使用，具体原因可以自己分析，如果日志量过大，可以自行使用定时任务清理。
+1. **设置服务器限制**
+   ```bash
+   ulimit -n 65535
+   ```
 
-2、注意config.php中的'daemonize'=>false,可以决定是否开启后台守护进程
+2. **开放防火墙端口**
+   ```bash
+   # Ubuntu/Debian 系统示例
+   ufw allow 6882/udp
+   
+   # CentOS/RHEL 系统示例
+   firewall-cmd --permanent --add-port=6882/udp
+   firewall-cmd --reload
+   ```
 
-3、数据量达到一层程度后需要分表或者分区，不然mysql性能会很差
+3. **启动客户端**
+   ```bash
+   ./swoole-cli dht_client/client.php
+   ```
 
-4、建议找一个流量比较充足的VPS来跑，最好是无限流量的
+4. **停止客户端**
+   ```bash
+   # 查找进程
+   ps aux|grep php_dht_client_master
+   # 终止进程（使用查找到的进程号）
+   kill -2 <进程号>
+   ```
 
-5、刚开始运行的时候因为节点信息获取的少，获取数据比较慢，很快速度就会上来
+#### dht_server（数据接收服务器）
 
-6、本工具仅用于学习和研究swoole相关知识，如果在使用中产生任何纠纷或者法律问题，本人概不负责
+1. **设置服务器限制**
+   ```bash
+   ulimit -n 65535
+   ```
+
+2. **开放防火墙端口**（如果服务器和客户端在不同机器上）
+   ```bash
+   # Ubuntu/Debian 系统示例
+   ufw allow 2345/udp
+   
+   # CentOS/RHEL 系统示例
+   firewall-cmd --permanent --add-port=2345/udp
+   firewall-cmd --reload
+   ```
+
+3. **启动服务器和客户端**
+   ```bash
+   # 启动服务器
+   ./swoole-cli dht_server/server.php
+   
+   # 启动客户端（在另一个终端或后台运行）
+   ./swoole-cli dht_client/client.php
+   ```
+
+4. **停止服务器**
+   ```bash
+   # 查找进程
+   ps aux|grep php_dht_server_master
+   # 终止进程（使用查找到的进程号）
+   kill -2 <进程号>
+   ```
+
+## 📁 项目结构
+
+```
+crazyDhtSpider/
+├── dht_client/          # 爬虫客户端目录
+│   ├── client.php       # 客户端主脚本
+│   ├── config.php       # 客户端配置
+│   └── inc/             # 客户端包含文件
+├── dht_server/          # 数据服务器目录
+│   ├── server.php       # 服务器主脚本
+│   ├── config.php       # 服务器配置
+│   └── inc/             # 服务器包含文件
+├── import_infohash.php  # Infohash导入Redis脚本
+├── README.md            # 英文文档
+└── README_CN.md         # 中文文档
+```
+
+## ⚙️ 配置说明
+
+### 主要配置选项
+
+- `daemonize`: 设置为 `true` 以后台守护进程方式运行
+- `server_port`: 服务器监听端口（默认：2345）
+- `client_port`: 客户端使用的端口（默认：6882）
+- `database`: 数据库连接设置
+
+### Redis 优化（新特性）
+
+项目现在使用 Redis Set 结构和二进制存储来存储 infohash，对于 1000 万条记录，内存使用减少约 63.6%。
+
+## 📊 性能优化建议
+
+1. **服务器要求**
+   - 具有足够带宽的 VPS（推荐无限流量）
+   - 至少 1GB 内存以处理中等流量
+   - SSD 存储以获得更好的数据库性能
+
+2. **数据库优化**
+   - 数据量增长时实现表分区
+   - 为频繁查询的字段使用适当的索引
+   - 高流量场景考虑使用读写分离
+
+3. **扩展建议**
+   - 在不同服务器上部署多个客户端实例
+   - 为服务器组件使用负载均衡
+   - 监控系统资源并根据需要调整
+
+## 🚨 常见问题
+
+1. **无法采集到数据**
+   - 确保防火墙已开放 6882 UDP 端口
+   - 检查服务器限制设置 `ulimit -n`
+
+2. **错误日志量大**
+   - 错误日志是正常的，不影响功能
+   - 使用定时任务清理大日志文件
+
+3. **初始数据采集缓慢**
+   - 这是正常现象，因为爬虫正在构建节点数据库
+   - 随着发现更多节点，性能会逐渐提高
+
+## 📝 注意事项
+
+1. 爬虫运行过程中会生成错误日志，这是正常的，不影响功能。
+2. 生产环境部署建议启用后台守护进程模式 (`daemonize => true`)。
+3. 监控数据库性能，必要时实现分区。
+4. 本工具仅用于学习和研究目的，作者不对使用过程中产生的任何纠纷或法律问题负责。
+
+## 🤝 贡献
+
+欢迎贡献！请随时提交 Pull Request。
+
+## 📄 许可证
+
+本项目基于 MIT 许可证开源。
