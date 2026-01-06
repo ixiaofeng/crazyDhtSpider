@@ -14,7 +14,9 @@ crazyDhtSpider
 
 2.Server firewall needs to open port 6882 UDP protocol
 
-3.run ./swoole-cli dht_client/client.php
+3.Please download the corresponding swoole executable file from the swoole official website and place it in the same directory as dht_client and dht_server
+
+4.run ./swoole-cli dht_client/client.php
 
 **A lot of people don't collect data because of the second reason**
 
