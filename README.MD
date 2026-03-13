@@ -139,7 +139,7 @@ crazyDhtSpider/
 
 ### dht_server/config.php 
 
-主要配置包括 Swoole 服务器设置和数据库连接信息，可根据实际环境调整。
+Main configurations include Swoole server settings and database connection information, which can be adjusted according to the actual environment.
 
 ## 📊 Performance Optimization Suggestions 
 
