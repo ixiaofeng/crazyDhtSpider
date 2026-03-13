@@ -87,14 +87,14 @@ class DhtClient
      */
     public static function append($node)
     {
-        global $nid, $table, $ip_port_index, $config;
+        global $nids, $table, $ip_port_index, $config;
         // 检查node id是否正确
         if (!isset($node->nid[19])) {
             return false;
         }
 
-        // 检查是否为自身node id
-        if ($node->nid == $nid) {
+        // 检查是否为自身node id（10个中的任何一个）
+        if (in_array($node->nid, $nids)) {
             return false;
         }
 
@@ -211,7 +211,9 @@ class DhtClient
 
     public static function on_ping($msg, $address)
     {
-        global $nid;
+        global $nids;
+        // 使用第一个node_id作为回复，或者可以选择更合适的策略
+        $current_nid = $nids[0];
         // 获取对端node id
         $id = $msg['a']['id'];
         // 生成回复数据
@@ -219,7 +221,7 @@ class DhtClient
             't' => $msg['t'],
             'y' => 'r',
             'r' => array(
-                'id' => Base::get_neighbor($id, $nid)
+                'id' => Base::get_neighbor($id, $current_nid)
             )
         );
 
@@ -232,7 +234,9 @@ class DhtClient
     public static function on_find_node($msg, $address)
     {
 
-        global $nid;
+        global $nids;
+        // 使用第一个node_id作为回复，或者可以选择更合适的策略
+        $current_nid = $nids[0];
         // 获取对端node id
         $id = $msg['a']['id'];
         // 生成回复数据
@@ -241,7 +245,7 @@ class DhtClient
             't' => $msg['t'],
             'y' => 'r',
             'r' => array(
-                'id' => Base::get_neighbor($id, $nid),
+                'id' => Base::get_neighbor($id, $current_nid),
                 'nodes' => Base::encode_nodes(self::get_nodes(16))
             )
         );
@@ -259,7 +263,9 @@ class DhtClient
      */
     public static function on_get_peers($msg, $address)
     {
-        global $nid;
+        global $nids;
+        // 使用第一个node_id作为回复，或者可以选择更合适的策略
+        $current_nid = $nids[0];
 
         // 获取info_hash信息
         $infohash = $msg['a']['info_hash'];
@@ -271,7 +277,7 @@ class DhtClient
             't' => $msg['t'],
             'y' => 'r',
             'r' => array(
-                'id' => Base::get_neighbor($id, $nid),
+                'id' => Base::get_neighbor($id, $current_nid),
                 'nodes' => "",
                 'token' => substr($infohash, 0, 2)
             )
@@ -292,7 +298,9 @@ class DhtClient
      */
     public static function on_announce_peer($msg, $address)
     {
-        global $nid, $config, $serv, $task_num;
+        global $nids, $config, $serv, $task_num;
+        // 使用第一个node_id作为回复，或者可以选择更合适的策略
+        $current_nid = $nids[0];
         $infohash = $msg['a']['info_hash'];
         $port = $msg['a']['port'];
         $token = $msg['a']['token'];
@@ -319,7 +327,7 @@ class DhtClient
             't' => $msg['t'],
             'y' => 'r',
             'r' => array(
-                'id' => $nid
+                'id' => $current_nid
             )
         );
 

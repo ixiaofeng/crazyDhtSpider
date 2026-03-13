@@ -1,179 +1,188 @@
-# crazyDhtSpider
+# crazyDhtSpider 
 
-## 🌐 Language Switch
-- **English README** | [中文 README](README_CN.md)
+## 🌐 Language Switch 
+- **English README** | [中文 README](README_CN.md) 
 
-This project is based on phpDhtSpider modification: [https://github.com/cuijun123/phpDhtSpider](https://github.com/cuijun123/phpDhtSpider)
+This project is modified from phpDhtSpider: `https://github.com/cuijun123/phpDhtSpider` 
 
-## 📋 Project Overview
+## 📋 Project Overview 
 
-A distributed DHT web crawler implemented in PHP using Swoole, designed to efficiently collect and process DHT network data.
+A distributed DHT network crawler implemented based on PHP + Swoole, designed to efficiently collect and process DHT network data. 
 
-## 🚀 Quick Start
+## 🚀 Quick Start 
 
-### Prerequisites
+### Environment Requirements 
 
-- Server with `ulimit -n 65535` set
-- Firewall configured to allow required ports
-- Swoole executable file placed in the project root directory
+- Server has set `ulimit -n 65535` 
+- Firewall has opened required ports 
+- Swoole executable file has been placed in the project root directory 
 
-### Installation
+### Installation Steps 
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/ixiaofeng/crazyDhtSpider.git
-   cd crazyDhtSpider
-   ```
+1. **Clone the repository** 
+   ```bash 
+   git clone https://github.com/ixiaofeng/crazyDhtSpider.git 
+   cd crazyDhtSpider 
+   ``` 
 
-2. **Download Swoole executable**
-   - Visit the [Swoole official website](https://www.swoole.com/)
-   - Download the corresponding Swoole executable file
-   - Place it in the same directory as `dht_client` and `dht_server`
+2. **Download Swoole executable file** 
+   - Visit `https://www.swoole.com/` 
+   - Download the corresponding Swoole executable file 
+   - Place it in the directory at the same level as `dht_client` and `dht_server` 
 
-3. **Configure the project**
-   - Edit `dht_client/config.php` and `dht_server/config.php` as needed
-   - Ensure database connections are properly configured
+3. **Configure the project** 
+   - Edit `dht_client/config.php` and `dht_server/config.php` as needed 
+   - Ensure database connection settings are correct 
 
-### Running the Crawler
+### Run the Crawler 
 
-#### dht_client (Crawler Server)
+#### dht_client (Crawler Server) 
 
-1. **Set server limits**
-   ```bash
-   ulimit -n 65535
-   ```
+1. **Set server limits** 
+   ```bash 
+   ulimit -n 65535 
+   ``` 
 
-2. **Open firewall port**
-   ```bash
-   # Example for Ubuntu/Debian
-   ufw allow 6882/udp
+2. **Open firewall ports** 
+   ```bash 
+   # Ubuntu/Debian system example 
+   ufw allow 6882/udp 
    
-   # Example for CentOS/RHEL
-   firewall-cmd --permanent --add-port=6882/udp
-   firewall-cmd --reload
-   ```
+   # CentOS/RHEL system example 
+   firewall-cmd --permanent --add-port=6882/udp 
+   firewall-cmd --reload 
+   ``` 
 
-3. **Start the client**
-   ```bash
-   ./swoole-cli dht_client/client.php
-   ```
+3. **Start the client** 
+   ```bash 
+   ./swoole-cli dht_client/client.php 
+   ``` 
 
-4. **Stop the client**
-   ```bash
-   # Find process
-   ps aux|grep php_dht_client_master
-   # Terminate process (use the found process ID)
-   kill -2 <process_id>
-   ```
+4. **Stop the client** 
+   ```bash 
+   # Find the process 
+   ps aux|grep php_dht_client_master 
+   # Terminate the process (use the found process ID) 
+   kill -2 <process_id> 
+   ``` 
 
-#### dht_server (Data Receiving Server)
+#### dht_server (Data Receiving Server) 
 
-1. **Set server limits**
-   ```bash
-   ulimit -n 65535
-   ```
+1. **Set server limits** 
+   ```bash 
+   ulimit -n 65535 
+   ``` 
 
-2. **Open firewall port** (if server and client are on different machines)
-   ```bash
-   # Example for Ubuntu/Debian
-   ufw allow 2345/udp
+2. **Open firewall ports** (if server and client are on different machines) 
+   ```bash 
+   # Ubuntu/Debian system example 
+   ufw allow 2345/udp 
    
-   # Example for CentOS/RHEL
-   firewall-cmd --permanent --add-port=2345/udp
-   firewall-cmd --reload
-   ```
+   # CentOS/RHEL system example 
+   firewall-cmd --permanent --add-port=2345/udp 
+   firewall-cmd --reload 
+   ``` 
 
-3. **Start the server and client**
-   ```bash
-   # Start server
-   ./swoole-cli dht_server/server.php
+3. **Start the server and client** 
+   ```bash 
+   # Start the server 
+   ./swoole-cli dht_server/server.php 
    
-   # Start client (in another terminal or background)
-   ./swoole-cli dht_client/client.php
-   ```
+   # Start the client (in another terminal or background) 
+   ./swoole-cli dht_client/client.php 
+   ``` 
 
-4. **Stop the server**
-   ```bash
-   # Find process
-   ps aux|grep php_dht_server_master
-   # Terminate process (use the found process ID)
-   kill -2 <process_id>
-   ```
+4. **Stop the server** 
+   ```bash 
+   # Find the process 
+   ps aux|grep php_dht_server_master 
+   # Terminate the process (use the found process ID) 
+   kill -2 <process_id> 
+   ``` 
 
-## 📁 Project Structure
+## 📁 Project Structure 
 
-```
-crazyDhtSpider/
-├── dht_client/          # Crawler client directory
-│   ├── client.php       # Main client script
-│   ├── config.php       # Client configuration
-│   └── inc/             # Client includes
-├── dht_server/          # Data server directory
-│   ├── server.php       # Main server script
-│   ├── config.php       # Server configuration
-│   └── inc/             # Server includes
-├── import_infohash.php  # Infohash import Redis script
-├── README.md            # English documentation
-└── README_CN.md         # Chinese documentation
-```
+``` 
+crazyDhtSpider/ 
+├── dht_client/          # Crawler client directory 
+│   ├── client.php       # Client main script 
+│   ├── config.php       # Client configuration 
+│   └── inc/             # Client include files 
+├── dht_server/          # Data server directory 
+│   ├── server.php       # Server main script 
+│   ├── config.php       # Server configuration 
+│   └── inc/             # Server include files 
+├── import_infohash.php  # Infohash import Redis script 
+├── README.md            # English documentation 
+└── README_CN.md         # Chinese documentation 
+``` 
 
-## ⚙️ Configuration
+## ⚙️ Configuration Guide 
 
-### Key Configuration Options
+### dht_client/config.php 
 
-- `daemonize`: Set to `true` to run as a background daemon
-- `server_port`: Port for the server to listen on (default: 2345)
-- `client_port`: Port for the client to use (default: 6882)
-- `database`: Database connection settings
+#### Download Mode Configuration 
+```php 
+// Download mode configuration 
+'enable_remote_download' => false,      // Enable remote download forwarding 
+'enable_local_download' => true,        // Enable local download 
+'only_remote_requests' => false,        // Only handle download requests from other servers 
+``` 
 
-### Redis Optimization (New Feature)
+**Download mode combinations**:
+1. **Default full mode** (false, true, false): Local download, run DHT crawler, handle local and remote download requests
+2. **Remote forwarding mode** (true, false, false): All download tasks forwarded to remote server, local only runs DHT crawler
+3. **Dual download mode** (true, true, false): Priority use remote download forwarding, local as backup
+4. **Pure crawler mode** (false, false, false): Only run DHT crawler, do not handle any download requests
+5. **Dedicated download server mode** (false, true, true): Only handle download requests from other servers, do not run DHT crawler
+6. **Restricted mode** (any, any, true): When only_remote_requests is true, download forwarding is automatically disabled, only handle remote download requests
 
-The project now uses Redis Set structure with binary storage for infohashes, reducing memory usage by approximately 63.6% for 10 million entries.
+### dht_server/config.php 
 
-## 📊 Performance Tips
+主要配置包括 Swoole 服务器设置和数据库连接信息，可根据实际环境调整。
 
-1. **Server Requirements**
-   - VPS with sufficient bandwidth (unlimited traffic recommended)
-   - At least 1GB RAM for handling moderate traffic
-   - SSD storage for better database performance
+## 📊 Performance Optimization Suggestions 
 
-2. **Database Optimization**
-   - Implement table partitioning when data volume grows
-   - Use appropriate indexes for frequently queried fields
-   - Consider using read replicas for high-traffic scenarios
+1. **Server Requirements** 
+   - VPS with sufficient bandwidth (unlimited traffic recommended) 
+   - At least 1GB memory to handle medium traffic 
+   - SSD storage for better database performance 
 
-3. **Scaling**
-   - Deploy multiple client instances across different servers
-   - Use load balancing for the server component
-   - Monitor system resources and adjust as needed
+2. **Database Optimization** 
+   - Implement table partitioning as data volume grows 
+   - Use appropriate indexes for frequently queried fields 
+   - Consider read-write separation for high-traffic scenarios 
 
-## 🚨 Common Issues
+3. **Scaling Suggestions** 
+   - Deploy multiple client instances on different servers 
+   - Use load balancing for server components 
+   - Monitor system resources and adjust as needed 
 
-1. **No data being collected**
-   - Ensure port 6882 UDP is open in the firewall
-   - Check server limits with `ulimit -n`
+## 🚨 Common Issues 
 
-2. **High error log volume**
-   - Error logs are normal and don't affect functionality
-   - Use scheduled tasks to clean up large log files
+1. **Cannot collect data** 
+   - Ensure firewall has opened 6882 UDP port 
+   - Check server limit setting `ulimit -n` 
 
-3. **Slow data collection initially**
-   - This is normal as the crawler builds its node database
-   - Performance improves over time as more nodes are discovered
+2. **Large error logs** 
+   - Error logs are normal and do not affect functionality 
+   - Use scheduled tasks to clean large log files 
 
-## 📝 Notes
+3. **Initial data collection is slow** 
+   - This is normal as the crawler is building its node database 
+   - Performance will gradually improve as more nodes are discovered 
 
-1. The crawler will generate error logs during operation, which is normal and doesn't affect functionality.
-2. Consider enabling the background daemon mode (`daemonize => true`) for production deployments.
-3. Monitor database performance and implement partitioning when necessary.
-4. This tool is intended for educational and research purposes only. The author is not responsible for any disputes or legal issues arising from its use.
+## 📝 Notes 
 
-## 🤝 Contributing
+1. Error logs will be generated during operation, which is normal and does not affect functionality. 
+2. For production deployment, it is recommended to enable background daemon mode (`daemonize => true`). 
+3. Monitor database performance and implement partitioning if necessary. 
+4. This tool is for learning and research purposes only. The author is not responsible for any disputes or legal issues arising from its use. 
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+## 🤝 Contribution 
 
-## 📄 License
+Contributions are welcome! Please feel free to submit Pull Requests. 
+
+## 📄 License 
 
 This project is open source under the MIT License.
-
-

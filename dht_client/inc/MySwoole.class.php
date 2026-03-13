@@ -7,6 +7,9 @@ class MySwoole
     
     // task worker状态检查阈值
     private static $taskThreshold = null; // 将从配置中动态获取
+    
+    // 钓鱼式探测执行标志
+    private static $fishingDetectionRunning = false;
     public static function workStart($serv, $worker_id)
     {
         global $config;
@@ -31,95 +34,306 @@ class MySwoole
             gc_collect_cycles();
         });
 
-        // 初始化并加载路由表（仅在事件worker进程中执行）
-        if ($worker_id < $serv->setting['worker_num']) {
-            global $table, $ROUTER_TABLE_FILE;
-
-            // 确保路由表文件存在
-            if (!file_exists($ROUTER_TABLE_FILE)) {
-                // 创建空的路由表文件
-                file_put_contents($ROUTER_TABLE_FILE, serialize(array()));
-            }
-
-            // 从dat文件加载路由表
-            if ($table instanceof Swoole\Table) {
-                global $ip_port_index;
-                $nodes = self::loadRouterTableFromFile($ROUTER_TABLE_FILE);
-                foreach ($nodes as $key => $node) {
-                    // 处理关联数组格式的节点数据
-                    if (isset($node['nid'], $node['ip'], $node['port'])) {
-                        $table->set($node['nid'], $node);
-                        // 同时更新IP+端口索引表
-                        $ip_port_key = $node['ip'] . ':' . $node['port'];
-                        $ip_port_index->set($ip_port_key, ['nid' => $node['nid']]);
-                    }
-                }
-            }
-
-            // 只让第一个事件worker进程立即保存路由表，确保文件创建成功
-            if ($worker_id == 0) {
-                // 获取节点数据
-                $nodes = self::getNodesFromTable();
-                if ($nodes !== false) {
-                    // 投递task保存路由表
-                    $serv->task([
-                        'type' => 'save_router_table',
-                        'file_path' => $ROUTER_TABLE_FILE,
-                        'nodes' => $nodes
-                    ]);
-                }
-            }
-        }
-
-        // 所有事件worker进程都参与自动查找节点任务，但只让第一个进程负责保存路由表和检查task状态
-        if ($worker_id < $serv->setting['worker_num']) {
-            // 启动自动查找节点的定时器，所有事件worker进程都执行
-            self::$autoFindTimerId = swoole_timer_tick($config['application']['auto_find_time'], function ($timer_id) use ($serv, $worker_id) {
-                global $table, $bootstrap_nodes;
-                
-                // 获取节点数量
-                $tableCount = $table instanceof Swoole\Table ? $table->count() : count($table);
-                
-                if ($tableCount == 0) {
-                    // 只有第一个worker进程执行join_dht，避免重复操作
-                    if ($worker_id == 0) {
-                        DhtServer::join_dht($table, $bootstrap_nodes);
-                    }
-                } else {
-                    // 所有worker进程都执行自动查找节点，但每个进程只处理一部分节点
-                    DhtServer::auto_find_node($table, $bootstrap_nodes);
-                }
-            });
-        }
+        // 检查是否只处理远程请求
+        $only_remote_requests = $config['application']['only_remote_requests'] ?? false;
         
-        // 只让第一个事件worker进程执行以下任务，避免并发冲突
-        if ($worker_id == 0) {
-            // 启动task worker状态检查定时器
-            swoole_timer_tick($config['application']['task_status_check_interval'], function ($timer_id) use ($serv) {
-                self::checkTaskWorkerStatus($serv);
-            });
+        // 如果只处理远程请求，则不执行任何DHT相关操作
+        if (!$only_remote_requests) {
+            // 初始化并加载路由表（仅在事件worker进程中执行）
+            if ($worker_id < $serv->setting['worker_num']) {
+                global $table, $ROUTER_TABLE_FILE;
 
-            // 定时保存路由表到dat文件
-            global $table, $ROUTER_TABLE_FILE;
-
-            // 简化定时保存路由表的逻辑，投递到task中执行
-            swoole_timer_tick($config['application']['router_table_save_interval'], function ($timer_id) use ($serv, $ROUTER_TABLE_FILE) {
-                // 获取节点数据
-                $nodes = self::getNodesFromTable();
-                if ($nodes !== false) {
-                    // 投递task保存路由表
-                    $serv->task([
-                        'type' => 'save_router_table',
-                        'file_path' => $ROUTER_TABLE_FILE,
-                        'nodes' => $nodes
-                    ]);
-                } else {
-                    error_log('Failed to get nodes from table for saving');
+                // 确保路由表文件存在
+                if (!file_exists($ROUTER_TABLE_FILE)) {
+                    // 创建空的路由表文件
+                    file_put_contents($ROUTER_TABLE_FILE, serialize(array()));
                 }
-            });
+
+                // 从dat文件加载路由表
+                if ($table instanceof Swoole\Table) {
+                    global $ip_port_index;
+                    $nodes = self::loadRouterTableFromFile($ROUTER_TABLE_FILE);
+                    foreach ($nodes as $key => $node) {
+                        // 处理关联数组格式的节点数据
+                        if (isset($node['nid'], $node['ip'], $node['port'])) {
+                            $table->set($node['nid'], $node);
+                            // 同时更新IP+端口索引表
+                            $ip_port_key = $node['ip'] . ':' . $node['port'];
+                            $ip_port_index->set($ip_port_key, ['nid' => $node['nid']]);
+                        }
+                    }
+                }
+
+                // 只让第一个事件worker进程立即保存路由表，确保文件创建成功
+                if ($worker_id == 0) {
+                    // 获取节点数据
+                    $nodes = self::getNodesFromTable();
+                    if ($nodes !== false) {
+                        // 投递task保存路由表
+                        $serv->task([
+                            'type' => 'save_router_table',
+                            'file_path' => $ROUTER_TABLE_FILE,
+                            'nodes' => $nodes
+                        ]);
+                    }
+                }
+            }
+
+            // 所有事件worker进程都参与自动查找节点任务，但只让第一个进程负责保存路由表和检查task状态
+            if ($worker_id < $serv->setting['worker_num']) {
+                // 启动自动查找节点的定时器，所有事件worker进程都执行
+                self::$autoFindTimerId = swoole_timer_tick($config['application']['auto_find_time'], function ($timer_id) use ($serv, $worker_id) {
+                    global $table, $bootstrap_nodes, $nids;
+                    
+                    // 定时更新Node ID池（混合策略：保持固定数量，更新部分）
+                    if ($worker_id == 0 && isset($GLOBALS['nids_last_update']) && isset($GLOBALS['NIDS_UPDATE_INTERVAL']) && time() - $GLOBALS['nids_last_update'] > $GLOBALS['NIDS_UPDATE_INTERVAL']) {
+                        // 获取当前Node ID池
+                        $current_nids = $GLOBALS['nids'] ?? [];
+                        $new_nids = [];
+                        
+                        // 保持固定数量的Node ID
+                        $fixed_count = min($GLOBALS['NODE_ID_FIXED_COUNT'] ?? 5, count($current_nids));
+                        for ($i = 0; $i < $fixed_count; $i++) {
+                            $new_nids[] = $current_nids[$i];
+                        }
+                        
+                        // 计算需要更新的数量
+                        $update_count = max(1, (int)ceil(($GLOBALS['NODE_ID_POOL_SIZE'] - $fixed_count) * ($GLOBALS['NODE_ID_UPDATE_RATIO'] ?? 0.3)));
+                        
+                        // 保留部分旧的Node ID
+                        $keep_count = $GLOBALS['NODE_ID_POOL_SIZE'] - $fixed_count - $update_count;
+                        if ($keep_count > 0 && count($current_nids) > $fixed_count) {
+                            $keep_nids = array_slice($current_nids, $fixed_count, $keep_count);
+                            $new_nids = array_merge($new_nids, $keep_nids);
+                        }
+                        
+                        // 生成新的Node ID
+                        while (count($new_nids) < $GLOBALS['NODE_ID_POOL_SIZE']) {
+                            $new_nid = Base::get_node_id();
+                            if (!in_array($new_nid, $new_nids)) {
+                                $new_nids[] = $new_nid;
+                            }
+                        }
+                        
+                        // 保存新的Node ID池
+                        file_put_contents($GLOBALS['NODE_ID_FILE'], serialize($new_nids));
+                        // 更新全局变量
+                        $GLOBALS['nids'] = $new_nids;
+                        $GLOBALS['nids_last_update'] = time();
+                        error_log('Node ID pool updated at ' . date('Y-m-d H:i:s') . ', fixed: ' . $fixed_count . ', updated: ' . $update_count . ', kept: ' . $keep_count);
+                    }
+                    
+                    // 获取节点数量
+                    $tableCount = $table instanceof Swoole\Table ? $table->count() : count($table);
+                    
+                    if ($tableCount == 0) {
+                        // 只有第一个worker进程执行join_dht，避免重复操作
+                        if ($worker_id == 0) {
+                            DhtServer::join_dht($table, $bootstrap_nodes);
+                        }
+                    } else {
+                        // 所有worker进程都执行自动查找节点，但每个进程只处理一部分节点
+                        DhtServer::auto_find_node($table, $bootstrap_nodes);
+                    }
+                });
+            }
+            
+            // 只让第一个事件worker进程执行以下任务，避免并发冲突
+            if ($worker_id == 0) {
+                // 启动task worker状态检查定时器
+                swoole_timer_tick($config['application']['task_status_check_interval'], function ($timer_id) use ($serv) {
+                    self::checkTaskWorkerStatus($serv);
+                });
+
+                // 定时保存路由表到dat文件
+                global $table, $ROUTER_TABLE_FILE;
+
+                // 简化定时保存路由表的逻辑，投递到task中执行
+                swoole_timer_tick($config['application']['router_table_save_interval'], function ($timer_id) use ($serv, $ROUTER_TABLE_FILE) {
+                    // 获取节点数据
+                    $nodes = self::getNodesFromTable();
+                    if ($nodes !== false) {
+                        // 投递task保存路由表
+                        $serv->task([
+                            'type' => 'save_router_table',
+                            'file_path' => $ROUTER_TABLE_FILE,
+                            'nodes' => $nodes
+                        ]);
+                    } else {
+                        error_log('Failed to get nodes from table for saving');
+                    }
+                });
+                
+                // 钓鱼式探测 - 每分钟随机发送get_peers请求
+                if (isset($config['application']['fishing_detection']) && $config['application']['fishing_detection']['enabled']) {
+                    swoole_timer_tick(60000, function ($timer_id) use ($config) {
+                        global $table, $redisPool;
+                        
+                        // 执行钓鱼式探测逻辑
+                        self::performFishingDetection($table, $redisPool, $config);
+                    });
+                }
+            }
         }
     }
 
+    /*
+    执行钓鱼式探测逻辑
+    @param Swoole\Table $table 路由表
+    @param RedisPool $redisPool Redis连接池
+    @param array $config 配置
+    */
+    public static function performFishingDetection($table, $redisPool, $config)
+    {
+        // 检查是否已经有钓鱼式探测在执行
+        if (self::$fishingDetectionRunning) {
+            error_log('Fishing detection is already running, skipping this execution');
+            return;
+        }
+        
+        // 设置执行标志
+        self::$fishingDetectionRunning = true;
+        
+        try {
+            // 检查开关配置
+            if (!isset($config['application']['fishing_detection']) || !$config['application']['fishing_detection']['enabled']) {
+                error_log('Fishing detection is disabled by configuration');
+                return;
+            }
+        
+            $fishing_config = $config['application']['fishing_detection'];
+            $requests_per_minute = $fishing_config['requests_per_minute']; // 200个节点
+            $infohash_key = $fishing_config['infohash_key'];
+            $min_interval_ms = $fishing_config['min_interval_ms'];
+        
+            // 1. 从Redis中随机获取100个Infohash
+            $infohash_count = 100;
+            $infohashes = self::getRandomInfohash($redisPool, $infohash_key, $infohash_count);
+            if (empty($infohashes) || !is_array($infohashes)) {
+                error_log('Failed to get 100 random infohashes from Redis');
+                return;
+            }
+        
+            // 确保infohashes是数组且非空
+            $infohashes = array_filter($infohashes);
+            if (empty($infohashes)) {
+                error_log('No valid infohashes obtained from Redis');
+                return;
+            }
+        
+            // 2. 从路由表中选择200个目标节点
+            $target_nodes = self::selectTargetNodes($table, $requests_per_minute);
+            if (empty($target_nodes)) {
+                error_log('No target nodes available in routing table');
+                return;
+            }
+        
+            $node_count = count($target_nodes);
+            $valid_infohash_count = count($infohashes);
+        
+            $sent_count = 0;
+        
+            // 3. 发送get_peers请求：为每个节点随机选择少量infohash
+            $infohash_sample_size = 5; // 每个节点发送的infohash数量
+            foreach ($target_nodes as $node) {
+                // 随机选择少量infohash
+                $sampled_infohashes = array_slice($infohashes, 0, $infohash_sample_size);
+                
+                // 遍历选中的infohash，为当前节点发送请求
+                foreach ($sampled_infohashes as $infohash) {
+                    if (!$infohash) {
+                        continue;
+                    }
+                    
+                    // 发送get_peers请求
+                    DhtServer::get_peers([$node['ip'], $node['port']], $infohash, $node['nid']);
+                    
+                    $sent_count++;
+                    
+                    // 频率控制：添加最小间隔
+                    usleep($min_interval_ms * 1000);
+                }
+            }
+        
+            error_log('Fishing detection completed: ' . $sent_count . ' requests sent to ' . $node_count . ' nodes with ' . $valid_infohash_count . ' different infohashes');
+        } finally {
+            // 无论执行成功还是失败，都要重置执行标志
+            self::$fishingDetectionRunning = false;
+        }
+    }
+    
+    /*
+    从Redis中随机获取Infohash
+    @param RedisPool $redisPool Redis连接池
+    @param string $infohash_key Redis中Infohash存储的键名
+    @param int $count 获取数量，默认1个
+    @return array|string|null 随机Infohash数组、单个Infohash或null
+    */
+    private static function getRandomInfohash($redisPool, $infohash_key, $count = 1)
+    {
+        try {
+            // 从Redis连接池获取连接
+            $redis = $redisPool->getConnection();
+            if (!$redis) {
+                return $count > 1 ? [] : null;
+            }
+            
+            // 使用SRANDMEMBER命令获取Infohash
+            $infohashes = $count > 1 
+                ? $redis->srandmember($infohash_key, $count) 
+                : $redis->srandmember($infohash_key);
+            
+            // 释放连接
+            $redisPool->returnConnection($redis);
+            
+            // 确保返回数组格式
+            if ($count > 1 && !is_array($infohashes)) {
+                $infohashes = $infohashes ? [$infohashes] : [];
+            }
+            
+            return $infohashes;
+        } catch (Exception $e) {
+            error_log('Redis error in getRandomInfohash: ' . $e->getMessage());
+            return $count > 1 ? [] : null;
+        }
+    }
+    
+    /*
+    从路由表中选择目标节点
+    @param Swoole\Table $table 路由表
+    @param int $max_nodes 最大节点数
+    @return array 目标节点数组
+    */
+    private static function selectTargetNodes($table, $max_nodes)
+    {
+        $target_nodes = [];
+        $node_list = [];
+        
+        // 从路由表中获取所有节点
+        if ($table instanceof Swoole\Table) {
+            foreach ($table as $node) {
+                $node_list[] = $node;
+            }
+        }
+        
+        // 如果节点数量不足，返回所有节点
+        if (count($node_list) <= $max_nodes) {
+            return $node_list;
+        }
+        
+        // 随机选择节点
+        $keys = array_rand($node_list, $max_nodes);
+        // 处理array_rand返回单个值的情况
+        if (!is_array($keys)) {
+            $keys = [$keys];
+        }
+        foreach ($keys as $key) {
+            $target_nodes[] = $node_list[$key];
+        }
+        
+        return $target_nodes;
+    }
+    
     /*
     $server，swoole_server对象
     $fd，TCP客户端连接的文件描述符
@@ -141,6 +355,39 @@ class MySwoole
 
             // 检查解码结果
             if ($msg === false || !is_array($msg)) {
+                return false;
+            }
+
+            // 检查是否只处理远程请求
+            $only_remote_requests = $config['application']['only_remote_requests'] ?? false;
+            
+            // 处理来自第三方的下载请求
+            if (isset($msg['type']) && $msg['type'] == 'download_metadata') {
+                // 提取任务数据
+                $ip = $msg['ip'] ?? null;
+                $port = $msg['port'] ?? null;
+                $infohash_serialized = $msg['infohash'] ?? null;
+
+                // 验证任务数据
+                if (empty($ip) || empty($port) || empty($infohash_serialized)) {
+                    return false;
+                }
+
+                // 验证IP和端口
+                if (!filter_var($ip, FILTER_VALIDATE_IP) || $port < 1 || $port > 65535) {
+                    return false;
+                }
+
+                // 投递到本地task worker执行下载
+                $serv->task(array(
+                    'type' => 'local_download_metadata',
+                    'ip' => $ip,
+                    'port' => $port,
+                    'infohash' => $infohash_serialized
+                ));
+                return true;
+            } else if ($only_remote_requests) {
+                // 如果只处理远程请求，则忽略所有非下载请求
                 return false;
             }
 
@@ -175,7 +422,7 @@ class MySwoole
         return true;
     }
 
-    public static function task(Swoole\Server $server, Swoole\Server\Task $task)
+    public static function task($server, $task)
     {
         try {
             // 验证任务数据
@@ -187,138 +434,246 @@ class MySwoole
             // 根据任务类型处理不同的任务
             $task_type = $task->data['type'] ?? null;
             
-            // 处理保存路由表任务
-            if ($task_type === 'save_router_table') {
-                $file_path = $task->data['file_path'] ?? null;
-                $nodes = $task->data['nodes'] ?? null;
-                
-                // 验证参数
-                if (empty($file_path) || !is_string($file_path) || !is_array($nodes)) {
-                    error_log('Invalid parameters for save_router_table task');
-                    $task->finish("ERROR: Invalid parameters");
-                    return;
-                }
-                
-                try {
-                    // 序列化路由表数据
-                    $serialized_data = serialize($nodes);
-                    if ($serialized_data === false) {
-                        error_log('Failed to serialize router table data');
-                        $task->finish("ERROR: Serialization failed");
-                        return;
-                    }
-
-                    // 确保目标目录存在
-                    if (!self::ensureDirectoryExists(dirname($file_path))) {
-                        $task->finish("ERROR: Directory creation failed");
-                        return;
-                    }
-
-                    // 使用原子操作保存文件
-                    if (self::saveFileAtomically($file_path, $serialized_data)) {
-                        $task->finish("OK: Router table saved");
-                    } else {
-                        error_log('Failed to save router table to file: ' . $file_path);
-                        $task->finish("ERROR: File save failed");
-                    }
-                } catch (Exception $e) {
-                    error_log('Exception when saving router table to file: ' . $e->getMessage());
-                    self::cleanupTempFile($file_path . '.tmp');
-                    $task->finish("ERROR: Exception occurred");
-                }
-                return;
+            switch ($task_type) {
+                case 'save_router_table':
+                    self::handleSaveRouterTableTask($task);
+                    break;
+                case 'local_download_metadata':
+                default:
+                    self::handleDownloadMetadataTask($task);
+                    break;
             }
-            
-            // 处理原始的metadata下载任务
-            global $config;
-            
-            // 提取任务数据
-            $ip = $task->data['ip'] ?? null;
-            $port = $task->data['port'] ?? null;
-            $infohash_serialized = $task->data['infohash'] ?? null;
-
-            // 验证任务数据完整性
-            if (empty($ip) || empty($port) || empty($infohash_serialized)) {
-                $task->finish("ERROR: Incomplete task data");
-                return;
-            }
-
-            // 验证IP和端口
-            if (!filter_var($ip, FILTER_VALIDATE_IP) || $port < 1 || $port > 65535) {
-                $task->finish("ERROR: Invalid IP or port");
-                return;
-            }
-
-            // 反序列化infohash
-            $infohash = @unserialize($infohash_serialized);
-            if ($infohash === false) {
-                $task->finish("ERROR: Invalid infohash");
-                return;
-            }
-
-            // 检查infohash是否已存在于Redis（仅当Redis开关开启时）
-            if ($config['redis']['enable']) {
-                $redisPool = RedisPool::getInstance();
-                try {
-                    $exists = $redisPool->exists($infohash);
-                    if ($exists) {
-                        // infohash已存在，直接返回，不处理
-                        $task->finish("OK: Infohash already exists in Redis");
-                        return;
-                    }
-                } catch (Throwable $e) {
-                    error_log('Redis exists check error: ' . $e->getMessage());
-                    // 如果Redis查询出错，继续处理，避免因Redis问题导致整个系统崩溃
-                }
-            }
-
-            // 检查infohash是否已存在于MySQL（仅当MySQL开关开启时）
-            if ($config['mysql']['enable']) {
-                $mysqlPool = MysqlPool::getInstance();
-                try {
-                    $exists = $mysqlPool->exists($infohash);
-                    if ($exists) {
-                        // infohash已存在，直接返回，不处理
-                        $task->finish("OK: Infohash already exists in MySQL");
-                        return;
-                    }
-                } catch (Throwable $e) {
-                    error_log('MySQL exists check error: ' . $e->getMessage());
-                    // 如果MySQL查询出错，继续处理，避免因MySQL问题导致整个系统崩溃
-                }
-            }
-
-            // 创建TCP客户端
-            $client = new Swoole\Client(SWOOLE_SOCK_TCP, SWOOLE_SOCK_SYNC);
-            $client->set(array(
-                'open_eof_check' => false,
-                'package_max_length' => 1024 * 1024,
-                'connect_timeout' => 0.5, // 增加连接超时
-                'timeout' => 1, // 增加读写超时
-            ));
-
-            // 连接到目标服务器
-            if (@$client->connect($ip, $port, 0.5)) {
-                try {
-                    $rs = Metadata::download_metadata($client, $infohash);
-                    if ($rs !== false && is_array($rs)) {
-                        // 发送响应
-                        DhtServer::send_response($rs, array($config['application']['server_ip'] ?? '127.0.0.1', $config['application']['server_port'] ?? 6882));
-                    }
-                } catch (Throwable $e) {
-                    error_log('Metadata download error: ' . $e->getMessage());
-                } finally {
-                    // 确保客户端关闭，释放资源
-                    $client->close(true);
-                }
-            }
-
-            $task->finish("OK");
         } catch (Throwable $e) {
             // 捕获所有类型的错误，避免进程崩溃
             error_log('Task processing critical error: ' . $e->getMessage());
             $task->finish("ERROR: " . $e->getMessage());
         }
+    }
+    
+    /**
+     * 处理保存路由表任务
+     * @param object $task 任务对象
+     */
+    private static function handleSaveRouterTableTask($task)
+    {
+        $file_path = $task->data['file_path'] ?? null;
+        $nodes = $task->data['nodes'] ?? null;
+        
+        // 验证参数
+        if (empty($file_path) || !is_string($file_path) || !is_array($nodes)) {
+            error_log('Invalid parameters for save_router_table task');
+            $task->finish("ERROR: Invalid parameters");
+            return;
+        }
+        
+        try {
+            // 序列化路由表数据
+            $serialized_data = serialize($nodes);
+            if ($serialized_data === false) {
+                error_log('Failed to serialize router table data');
+                $task->finish("ERROR: Serialization failed");
+                return;
+            }
+
+            // 确保目标目录存在
+            if (!self::ensureDirectoryExists(dirname($file_path))) {
+                $task->finish("ERROR: Directory creation failed");
+                return;
+            }
+
+            // 使用原子操作保存文件
+            if (self::saveFileAtomically($file_path, $serialized_data)) {
+                $task->finish("OK: Router table saved");
+            } else {
+                error_log('Failed to save router table to file: ' . $file_path);
+                $task->finish("ERROR: File save failed");
+            }
+        } catch (Exception $e) {
+            error_log('Exception when saving router table to file: ' . $e->getMessage());
+            self::cleanupTempFile($file_path . '.tmp');
+            $task->finish("ERROR: Exception occurred");
+        }
+    }
+    
+    /**
+     * 处理metadata下载任务
+     * @param object $task 任务对象
+     */
+    private static function handleDownloadMetadataTask($task)
+    {
+        global $config;
+        
+        // 提取任务数据
+        $ip = $task->data['ip'] ?? null;
+        $port = $task->data['port'] ?? null;
+        $infohash_serialized = $task->data['infohash'] ?? null;
+        $task_type = $task->data['type'] ?? null;
+
+        // 验证任务数据完整性
+        if (empty($ip) || empty($port) || empty($infohash_serialized)) {
+            $task->finish("ERROR: Incomplete task data");
+            return;
+        }
+
+        // 验证IP和端口
+        if (!filter_var($ip, FILTER_VALIDATE_IP) || $port < 1 || $port > 65535) {
+            $task->finish("ERROR: Invalid IP or port");
+            return;
+        }
+
+        // 反序列化infohash
+        $infohash = @unserialize($infohash_serialized);
+        if ($infohash === false) {
+            $task->finish("ERROR: Invalid infohash");
+            return;
+        }
+
+        // 检查是否只处理来自其他服务器的下载请求
+        $only_remote_requests = $config['application']['only_remote_requests'] ?? false;
+        if ($only_remote_requests && $task_type !== 'local_download_metadata') {
+            // 只处理local_download_metadata类型的任务（来自其他服务器的请求）
+            $task->finish("OK: Ignored default download task");
+            return;
+        }
+
+        // 检查infohash是否已存在
+        if (self::checkInfohashExists($infohash)) {
+            $task->finish("OK: Infohash already exists");
+            return;
+        }
+
+        // 检查配置并处理下载
+        $enable_remote_download = $config['application']['enable_remote_download'] ?? false;
+        $enable_local_download = $config['application']['enable_local_download'] ?? true;
+        
+        // 如果只处理远程请求，则禁用下载转发
+        if ($only_remote_requests) {
+            $enable_remote_download = false;
+        }
+        
+        // 检查是否两个配置都为true
+        if ($enable_remote_download && $enable_local_download) {
+            error_log('Both remote and local download are enabled, using remote download forwarding.');
+        }
+        
+        if ($enable_remote_download) {
+            // 转发请求到远程下载服务器
+            self::forwardDownloadRequest($task, $ip, $port, $infohash_serialized);
+        } elseif ($enable_local_download) {
+            // 本地执行下载
+            self::executeLocalDownload($task, $ip, $port, $infohash);
+        } else {
+            // 下载功能已禁用
+            $task->finish("ERROR: Download functionality is disabled");
+        }
+    }
+    
+    /**
+     * 检查infohash是否已存在
+     * @param string $infohash infohash
+     * @return bool 是否存在
+     */
+    private static function checkInfohashExists($infohash)
+    {
+        global $config;
+        
+        // 检查infohash是否已存在于Redis（仅当Redis开关开启时）
+        if ($config['redis']['enable']) {
+            $redisPool = RedisPool::getInstance();
+            try {
+                $exists = $redisPool->exists($infohash);
+                if ($exists) {
+                    return true;
+                }
+            } catch (Throwable $e) {
+                error_log('Redis exists check error: ' . $e->getMessage());
+                // 如果Redis查询出错，继续处理，避免因Redis问题导致整个系统崩溃
+            }
+        }
+
+        // 检查infohash是否已存在于MySQL（仅当MySQL开关开启时）
+        if ($config['mysql']['enable']) {
+            $mysqlPool = MysqlPool::getInstance();
+            try {
+                $exists = $mysqlPool->exists($infohash);
+                if ($exists) {
+                    return true;
+                }
+            } catch (Throwable $e) {
+                error_log('MySQL exists check error: ' . $e->getMessage());
+                // 如果MySQL查询出错，继续处理，避免因MySQL问题导致整个系统崩溃
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * 转发下载请求到远程服务器
+     * @param object $task 任务对象
+     * @param string $ip IP地址
+     * @param int $port 端口
+     * @param string $infohash_serialized 序列化的infohash
+     */
+    private static function forwardDownloadRequest($task, $ip, $port, $infohash_serialized)
+    {
+        global $config;
+        
+        // 转发请求到远程下载服务器
+        $download_server_ip = $config['application']['download_server_ip'] ?? '127.0.0.1';
+        $download_server_port = $config['application']['download_server_port'] ?? 6882;
+        
+        // 构建转发请求
+        $forward_msg = array(
+            'type' => 'download_metadata',
+            'ip' => $ip,
+            'port' => $port,
+            'infohash' => $infohash_serialized
+        );
+        
+        // 发送到下载服务器
+        DhtServer::send_response($forward_msg, array($download_server_ip, $download_server_port));
+        
+        $task->finish("OK: Request forwarded to download server");
+    }
+    
+    /**
+     * 执行本地下载
+     * @param object $task 任务对象
+     * @param string $ip IP地址
+     * @param int $port 端口
+     * @param string $infohash infohash
+     */
+    private static function executeLocalDownload($task, $ip, $port, $infohash)
+    {
+        global $config;
+        
+        // 创建TCP客户端
+        $client = new Swoole\Client(SWOOLE_SOCK_TCP, SWOOLE_SOCK_SYNC);
+        $client->set(array(
+            'open_eof_check' => false,
+            'package_max_length' => 1024 * 1024,
+            'connect_timeout' => 0.5, // 增加连接超时
+            'timeout' => 1, // 增加读写超时
+        ));
+
+        // 连接到目标服务器
+        if (@$client->connect($ip, $port, 0.5)) {
+            try {
+                $rs = Metadata::download_metadata($client, $infohash);
+                if ($rs !== false && is_array($rs)) {
+                    // 发送响应
+                    DhtServer::send_response($rs, array($config['application']['server_ip'] ?? '127.0.0.1', $config['application']['server_port'] ?? 6882));
+                }
+            } catch (Throwable $e) {
+                error_log('Metadata download error: ' . $e->getMessage());
+            } finally {
+                // 确保客户端关闭，释放资源
+                $client->close(true);
+            }
+        }
+
+        $task->finish("OK");
     }
 
     /**

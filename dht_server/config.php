@@ -21,7 +21,7 @@ return array(
     'db' => array(
         'host' => '',
         'port' => '3306',
-        'user' => '',
+        'user' => 'dht',
         'pass' => '',
         'name' => 'dht',
     )

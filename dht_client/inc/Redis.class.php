@@ -189,8 +189,20 @@ class RedisPool
                 // 使用统一的Set来存储所有infohash
                 $set_key = $this->config['prefix'] . 'infohashes';
                 
-                // 检查infohash是否存在于Set中
+                // 检查二进制格式是否存在
                 $result = $redis->sIsMember($set_key, $infohash_bin);
+                
+                // 如果二进制格式不存在，检查大写十六进制格式
+                if (!$result) {
+                    $infohash_hex_upper = strtoupper(bin2hex($infohash_bin));
+                    $result = $redis->sIsMember($set_key, $infohash_hex_upper);
+                }
+                
+                // 如果大写十六进制格式不存在，检查小写十六进制格式
+                if (!$result) {
+                    $infohash_hex_lower = strtolower(bin2hex($infohash_bin));
+                    $result = $redis->sIsMember($set_key, $infohash_hex_lower);
+                }
                 
                 // 归还连接
                 $this->returnConnection($redis);
@@ -239,7 +251,24 @@ class RedisPool
                 // 使用统一的Set来存储所有infohash
                 $set_key = $this->config['prefix'] . 'infohashes';
                 
-                // 将infohash添加到Set中
+                // 先检查是否已存在（同时检查二进制、大写和小写十六进制格式）
+                $exists = $redis->sIsMember($set_key, $infohash_bin);
+                if (!$exists) {
+                    $infohash_hex_upper = strtoupper(bin2hex($infohash_bin));
+                    $exists = $redis->sIsMember($set_key, $infohash_hex_upper);
+                }
+                if (!$exists) {
+                    $infohash_hex_lower = strtolower(bin2hex($infohash_bin));
+                    $exists = $redis->sIsMember($set_key, $infohash_hex_lower);
+                }
+                
+                // 如果已存在，直接返回
+                if ($exists) {
+                    $this->returnConnection($redis);
+                    return false;
+                }
+                
+                // 将infohash添加到Set中（使用二进制格式）
                 $result = $redis->sAdd($set_key, $infohash_bin);
                 
                 // 设置Set的过期时间（只在添加成功时设置，避免重复操作）

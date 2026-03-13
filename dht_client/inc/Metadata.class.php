@@ -25,7 +25,7 @@ class Metadata
         try {
             // 优化：设置更短的总超时时间
             $start_time = microtime(true);
-            $total_timeout = 20; // 总超时时间从10秒调整为20秒
+            $total_timeout = 60; // 总超时时间从10秒调整为20秒
             
             $packet = self::send_handshake($client, $infohash);
             if ($packet === false || microtime(true) - $start_time > $total_timeout) {
@@ -46,7 +46,7 @@ class Metadata
             $metadata_size = self::get_metadata_size($packet);
             
             // 优化：更严格的大小限制
-            if ($metadata_size > self::$PIECE_LENGTH * 500) {
+            if ($metadata_size > self::$PIECE_LENGTH * 256) {
                 return false;
             }
             if ($metadata_size < 10) {
@@ -55,7 +55,7 @@ class Metadata
 
             $piecesNum = ceil($metadata_size / (self::$PIECE_LENGTH));
             // 优化：进一步限制最大piece数量
-            if ($piecesNum > 50) {
+            if ($piecesNum > 256) {
                 return false;
             }
             
