@@ -24,6 +24,11 @@ class MySwoole
         if (self::$taskThreshold === null) {
             self::$taskThreshold = $config['application']['task_threshold'] ?? 0.8; // 默认值
         }
+        
+        // 为每个Worker进程初始化Redis连接池
+        RedisPool::getInstance()->init($config['redis']);
+        // 为每个Worker进程初始化MySQL连接池
+        MysqlPool::getInstance()->init($config['mysql']);
 
         // 移除手动信号处理，让Swoole管理进程的正常退出
         // Swoole会自动处理SIGTERM和SIGINT信号，确保进程优雅退出
@@ -653,13 +658,14 @@ class MySwoole
         $client->set(array(
             'open_eof_check' => false,
             'package_max_length' => 1024 * 1024,
-            'connect_timeout' => 0.5, // 增加连接超时
-            'timeout' => 1, // 增加读写超时
+            'connect_timeout' => 0.5, // 连接超时
+            'timeout' => 1, // 读写超时
         ));
 
         // 连接到目标服务器
         if (@$client->connect($ip, $port, 0.5)) {
             try {
+                // 执行下载，确保不超时
                 $rs = Metadata::download_metadata($client, $infohash);
                 if ($rs !== false && is_array($rs)) {
                     // 发送响应
@@ -673,6 +679,7 @@ class MySwoole
             }
         }
 
+        // 确保任务及时完成
         $task->finish("OK");
     }
 

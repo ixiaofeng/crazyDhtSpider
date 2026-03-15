@@ -25,7 +25,7 @@ class Metadata
         try {
             // 优化：设置更短的总超时时间
             $start_time = microtime(true);
-            $total_timeout = 60; // 总超时时间从10秒调整为20秒
+            $total_timeout = 30; // 总超时时间从10秒调整为20秒
             
             $packet = self::send_handshake($client, $infohash);
             if ($packet === false || microtime(true) - $start_time > $total_timeout) {

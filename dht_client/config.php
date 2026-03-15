@@ -102,10 +102,10 @@ return array(
         'password' => '',
         'database' => 0,
         'timeout' => 2,
-        'persistent' => true,
+        'persistent' => false,                  // 不建议使用持久连接，避免连接数激增
         'prefix' => 'dht_',
         'infohash_expire' => 86400,             // infohash过期时间，单位：秒
-        'max_connections' => 500                // 及时关注error.log，避免连接数超过redis最大连接数
+        'max_connections' => 50                 // 降低连接数，避免连接数爆炸
     ),
     
     // MySQL配置 用于存储infohash信息进行重复校验，服务器性能不行的话不建议使用
